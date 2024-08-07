@@ -9,7 +9,6 @@ require (
 	github.com/klauspost/compress v1.17.9
 	github.com/nats-io/jwt v1.2.2
 	github.com/nats-io/nats-server/v2 v2.10.17
-	github.com/nats-io/nkeys v0.4.7
 	github.com/nats-io/nuid v1.0.1
 	go.uber.org/goleak v1.3.0
 	golang.org/x/text v0.16.0

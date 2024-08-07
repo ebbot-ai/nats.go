@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,7 +38,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nats-io/nkeys"
 	"github.com/nats-io/nuid"
 
 	"github.com/ebbot-ai/nats.go/util"
@@ -125,10 +123,7 @@ var (
 	ErrNoEchoNotSupported          = errors.New("nats: no echo option not supported by this server")
 	ErrClientIDNotSupported        = errors.New("nats: client ID not supported by this server")
 	ErrUserButNoSigCB              = errors.New("nats: user callback defined without a signature handler")
-	ErrNkeyButNoSigCB              = errors.New("nats: nkey defined without a signature handler")
 	ErrNoUserCB                    = errors.New("nats: user callback not defined")
-	ErrNkeyAndUser                 = errors.New("nats: user callback and nkey defined")
-	ErrNkeysNotSupported           = errors.New("nats: nkeys not supported by the server")
 	ErrStaleConnection             = errors.New("nats: " + STALE_CONNECTION)
 	ErrTokenAlreadySet             = errors.New("nats: token and token handler both set")
 	ErrMsgNotBound                 = errors.New("nats: message is not bound to subscription/connection")
@@ -1192,46 +1187,6 @@ func TokenHandler(cb AuthTokenHandler) Option {
 	}
 }
 
-// UserCredentials is a convenience function that takes a filename
-// for a user's JWT and a filename for the user's private Nkey seed.
-func UserCredentials(userOrChainedFile string, seedFiles ...string) Option {
-	userCB := func() (string, error) {
-		return userFromFile(userOrChainedFile)
-	}
-	var keyFile string
-	if len(seedFiles) > 0 {
-		keyFile = seedFiles[0]
-	} else {
-		keyFile = userOrChainedFile
-	}
-	sigCB := func(nonce []byte) ([]byte, error) {
-		return sigHandler(nonce, keyFile)
-	}
-	return UserJWT(userCB, sigCB)
-}
-
-// UserJWTAndSeed is a convenience function that takes the JWT and seed
-// values as strings.
-func UserJWTAndSeed(jwt string, seed string) Option {
-	userCB := func() (string, error) {
-		return jwt, nil
-	}
-
-	sigCB := func(nonce []byte) ([]byte, error) {
-		kp, err := nkeys.FromSeed([]byte(seed))
-		if err != nil {
-			return nil, fmt.Errorf("unable to extract key pair from seed: %w", err)
-		}
-		// Wipe our key on exit.
-		defer kp.Wipe()
-
-		sig, _ := kp.Sign(nonce)
-		return sig, nil
-	}
-
-	return UserJWT(userCB, sigCB)
-}
-
 // UserJWT will set the callbacks to retrieve the user's JWT and
 // the signature callback to sign the server nonce. This an the Nkey
 // option are mutually exclusive.
@@ -1251,19 +1206,6 @@ func UserJWT(userCB UserJWTHandler, sigCB SignatureHandler) Option {
 
 		o.UserJWT = userCB
 		o.SignatureCB = sigCB
-		return nil
-	}
-}
-
-// Nkey will set the public Nkey and the signature callback to
-// sign the server nonce.
-func Nkey(pubKey string, sigCB SignatureHandler) Option {
-	return func(o *Options) error {
-		o.Nkey = pubKey
-		o.SignatureCB = sigCB
-		if pubKey != "" && sigCB == nil {
-			return ErrNkeyButNoSigCB
-		}
 		return nil
 	}
 }
@@ -1541,16 +1483,6 @@ func (o Options) Connect() (*Conn, error) {
 	// Ensure that Timeout is not 0
 	if nc.Opts.Timeout == 0 {
 		nc.Opts.Timeout = DefaultTimeout
-	}
-
-	// Check first for user jwt callback being defined and nkey.
-	if nc.Opts.UserJWT != nil && nc.Opts.Nkey != "" {
-		return nil, ErrNkeyAndUser
-	}
-
-	// Check if we have an nkey but no signature callback defined.
-	if nc.Opts.Nkey != "" && nc.Opts.SignatureCB == nil {
-		return nil, ErrNkeyButNoSigCB
 	}
 
 	// Allow custom Dialer for connecting using a timeout by default
@@ -2521,10 +2453,6 @@ func (nc *Conn) processExpectedInfo() error {
 		return err
 	}
 
-	if nc.Opts.Nkey != "" && nc.info.Nonce == "" {
-		return ErrNkeysNotSupported
-	}
-
 	// For websocket connections, we already switched to TLS if need be,
 	// so we are done here.
 	if nc.ws {
@@ -2563,32 +2491,6 @@ func (nc *Conn) connectProto() (string, error) {
 		pass = o.Password
 		token = o.Token
 		nkey = o.Nkey
-	}
-
-	// Look for user jwt.
-	if o.UserJWT != nil {
-		if jwt, err := o.UserJWT(); err != nil {
-			return _EMPTY_, err
-		} else {
-			ujwt = jwt
-		}
-		if nkey != _EMPTY_ {
-			return _EMPTY_, ErrNkeyAndUser
-		}
-	}
-
-	if ujwt != _EMPTY_ || nkey != _EMPTY_ {
-		if o.SignatureCB == nil {
-			if ujwt == _EMPTY_ {
-				return _EMPTY_, ErrNkeyButNoSigCB
-			}
-			return _EMPTY_, ErrUserButNoSigCB
-		}
-		sigraw, err := o.SignatureCB([]byte(nc.info.Nonce))
-		if err != nil {
-			return _EMPTY_, fmt.Errorf("error signing nonce: %w", err)
-		}
-		sig = base64.RawURLEncoding.EncodeToString(sigraw)
 	}
 
 	if nc.Opts.TokenHandler != nil {
@@ -5775,50 +5677,11 @@ func (nc *Conn) changeConnStatus(status Status) {
 	nc.status = status
 }
 
-// NkeyOptionFromSeed will load an nkey pair from a seed file.
-// It will return the NKey Option and will handle
-// signing of nonce challenges from the server. It will take
-// care to not hold keys in memory and to wipe memory.
-func NkeyOptionFromSeed(seedFile string) (Option, error) {
-	kp, err := nkeyPairFromSeedFile(seedFile)
-	if err != nil {
-		return nil, err
-	}
-	// Wipe our key on exit.
-	defer kp.Wipe()
-
-	pub, err := kp.PublicKey()
-	if err != nil {
-		return nil, err
-	}
-	if !nkeys.IsValidPublicUserKey(pub) {
-		return nil, fmt.Errorf("nats: Not a valid nkey user seed")
-	}
-	sigCB := func(nonce []byte) ([]byte, error) {
-		return sigHandler(nonce, seedFile)
-	}
-	return Nkey(string(pub), sigCB), nil
-}
-
 // Just wipe slice with 'x', for clearing contents of creds or nkey seed file.
 func wipeSlice(buf []byte) {
 	for i := range buf {
 		buf[i] = 'x'
 	}
-}
-
-func userFromFile(userFile string) (string, error) {
-	path, err := expandPath(userFile)
-	if err != nil {
-		return _EMPTY_, fmt.Errorf("nats: %w", err)
-	}
-
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return _EMPTY_, fmt.Errorf("nats: %w", err)
-	}
-	defer wipeSlice(contents)
-	return nkeys.ParseDecoratedJWT(contents)
 }
 
 func homeDir() (string, error) {
@@ -5859,29 +5722,6 @@ func expandPath(p string) (string, error) {
 	}
 
 	return filepath.Join(home, p[1:]), nil
-}
-
-func nkeyPairFromSeedFile(seedFile string) (nkeys.KeyPair, error) {
-	contents, err := os.ReadFile(seedFile)
-	if err != nil {
-		return nil, fmt.Errorf("nats: %w", err)
-	}
-	defer wipeSlice(contents)
-	return nkeys.ParseDecoratedNKey(contents)
-}
-
-// Sign authentication challenges from the server.
-// Do not keep private seed in memory.
-func sigHandler(nonce []byte, seedFile string) ([]byte, error) {
-	kp, err := nkeyPairFromSeedFile(seedFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to extract key pair from file %q: %w", seedFile, err)
-	}
-	// Wipe our key on exit.
-	defer kp.Wipe()
-
-	sig, _ := kp.Sign(nonce)
-	return sig, nil
 }
 
 type timeoutWriter struct {

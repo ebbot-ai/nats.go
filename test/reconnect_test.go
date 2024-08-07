@@ -27,7 +27,6 @@ import (
 	"github.com/nats-io/jwt"
 	"github.com/nats-io/nats-server/v2/server"
 	"github.com/ebbot-ai/nats.go"
-	"github.com/nats-io/nkeys"
 )
 
 func startReconnectServer(t *testing.T) *server.Server {
@@ -823,65 +822,6 @@ func TestReconnectBufSizeDisable(t *testing.T) {
 	}
 }
 
-func TestAuthExpiredReconnect(t *testing.T) {
-	ts := runTrustServer()
-	defer ts.Shutdown()
-
-	_, err := nats.Connect(ts.ClientURL())
-	if err == nil {
-		t.Fatalf("Expecting an error on connect")
-	}
-	ukp, err := nkeys.FromSeed(uSeed)
-	if err != nil {
-		t.Fatalf("Error creating user key pair: %v", err)
-	}
-	upub, err := ukp.PublicKey()
-	if err != nil {
-		t.Fatalf("Error getting user public key: %v", err)
-	}
-	akp, err := nkeys.FromSeed(aSeed)
-	if err != nil {
-		t.Fatalf("Error creating account key pair: %v", err)
-	}
-
-	jwtCB := func() (string, error) {
-		claims := jwt.NewUserClaims("test")
-		claims.Expires = time.Now().Add(time.Second).Unix()
-		claims.Subject = upub
-		jwt, err := claims.Encode(akp)
-		if err != nil {
-			return "", err
-		}
-		return jwt, nil
-	}
-	sigCB := func(nonce []byte) ([]byte, error) {
-		kp, _ := nkeys.FromSeed(uSeed)
-		sig, _ := kp.Sign(nonce)
-		return sig, nil
-	}
-
-	errCh := make(chan error, 1)
-	nc, err := nats.Connect(ts.ClientURL(), nats.UserJWT(jwtCB, sigCB), nats.ReconnectWait(100*time.Millisecond),
-		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
-			errCh <- err
-		}))
-	if err != nil {
-		t.Fatalf("Expected to connect, got %v", err)
-	}
-	stasusCh := nc.StatusChanged(nats.RECONNECTING, nats.CONNECTED)
-	select {
-	case err := <-errCh:
-		if !errors.Is(err, nats.ErrAuthExpired) {
-			t.Fatalf("Expected auth expired error, got %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Did not get the auth expired error")
-	}
-	WaitOnChannel(t, stasusCh, nats.RECONNECTING)
-	WaitOnChannel(t, stasusCh, nats.CONNECTED)
-	nc.Close()
-}
-
 func TestForceReconnect(t *testing.T) {
 	s := RunDefaultServer()
 
@@ -1018,77 +958,3 @@ func TestForceReconnectDisallowReconnect(t *testing.T) {
 
 }
 
-func TestAuthExpiredForceReconnect(t *testing.T) {
-	ts := runTrustServer()
-	defer ts.Shutdown()
-
-	_, err := nats.Connect(ts.ClientURL())
-	if err == nil {
-		t.Fatalf("Expecting an error on connect")
-	}
-	ukp, err := nkeys.FromSeed(uSeed)
-	if err != nil {
-		t.Fatalf("Error creating user key pair: %v", err)
-	}
-	upub, err := ukp.PublicKey()
-	if err != nil {
-		t.Fatalf("Error getting user public key: %v", err)
-	}
-	akp, err := nkeys.FromSeed(aSeed)
-	if err != nil {
-		t.Fatalf("Error creating account key pair: %v", err)
-	}
-
-	jwtCB := func() (string, error) {
-		claims := jwt.NewUserClaims("test")
-		claims.Expires = time.Now().Add(time.Second).Unix()
-		claims.Subject = upub
-		jwt, err := claims.Encode(akp)
-		if err != nil {
-			return "", err
-		}
-		return jwt, nil
-	}
-	sigCB := func(nonce []byte) ([]byte, error) {
-		kp, _ := nkeys.FromSeed(uSeed)
-		sig, _ := kp.Sign(nonce)
-		return sig, nil
-	}
-
-	errCh := make(chan error, 1)
-	nc, err := nats.Connect(ts.ClientURL(), nats.UserJWT(jwtCB, sigCB), nats.ReconnectWait(10*time.Second),
-		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
-			errCh <- err
-		}))
-	if err != nil {
-		t.Fatalf("Expected to connect, got %v", err)
-	}
-	defer nc.Close()
-	statusCh := nc.StatusChanged(nats.RECONNECTING, nats.CONNECTED)
-	defer close(statusCh)
-	newStatus := make(chan nats.Status, 10)
-	// non-blocking channel, so we need to be constantly listening
-	go func() {
-		for {
-			s, ok := <-statusCh
-			if !ok {
-				return
-			}
-			newStatus <- s
-		}
-	}()
-	time.Sleep(100 * time.Millisecond)
-	select {
-	case err := <-errCh:
-		if !errors.Is(err, nats.ErrAuthExpired) {
-			t.Fatalf("Expected auth expired error, got %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Did not get the auth expired error")
-	}
-	if err := nc.ForceReconnect(); err != nil {
-		t.Fatalf("Unexpected error on reconnect: %v", err)
-	}
-	WaitOnChannel(t, newStatus, nats.RECONNECTING)
-	WaitOnChannel(t, newStatus, nats.CONNECTED)
-}

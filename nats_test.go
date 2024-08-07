@@ -35,8 +35,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/nats-io/nkeys"
 )
 
 func TestVersion(t *testing.T) {
@@ -1388,102 +1386,6 @@ func createTmpFile(t *testing.T, content []byte) string {
 		t.Fatalf("Error writing conf file: %v", err)
 	}
 	return fName
-}
-
-func TestNKeyOptionFromSeed(t *testing.T) {
-	if _, err := NkeyOptionFromSeed("file_that_does_not_exist"); err == nil {
-		t.Fatal("Expected error got none")
-	}
-
-	seedFile := createTmpFile(t, []byte(`
-		# No seed
-		THIS_NOT_A_NKEY_SEED
-	`))
-	defer os.Remove(seedFile)
-	if _, err := NkeyOptionFromSeed(seedFile); err == nil || !strings.Contains(err.Error(), "seed found") {
-		t.Fatalf("Expected error about seed not found, got %v", err)
-	}
-	os.Remove(seedFile)
-
-	seedFile = createTmpFile(t, []byte(`
-		# Invalid seed
-		SUBADSEED
-	`))
-	// Make sure that we detect SU (trim space) but it still fails because
-	// this is not a valid NKey.
-	if _, err := NkeyOptionFromSeed(seedFile); err == nil || strings.Contains(err.Error(), "seed found") {
-		t.Fatalf("Expected error about invalid key, got %v", err)
-	}
-	os.Remove(seedFile)
-
-	kp, _ := nkeys.CreateUser()
-	seed, _ := kp.Seed()
-	seedFile = createTmpFile(t, seed)
-	opt, err := NkeyOptionFromSeed(seedFile)
-	if err != nil {
-		t.Fatalf("Error: %v", err)
-	}
-
-	l, e := net.Listen("tcp", "127.0.0.1:0")
-	if e != nil {
-		t.Fatal("Could not listen on an ephemeral port")
-	}
-	tl := l.(*net.TCPListener)
-	defer tl.Close()
-
-	addr := tl.Addr().(*net.TCPAddr)
-
-	ch := make(chan bool, 1)
-	errCh := make(chan error, 1)
-	rs := func(ch chan bool) {
-		conn, err := l.Accept()
-		if err != nil {
-			errCh <- fmt.Errorf("error accepting client connection: %v", err)
-			return
-		}
-		defer conn.Close()
-		info := "INFO {\"server_id\":\"foobar\",\"nonce\":\"anonce\"}\r\n"
-		conn.Write([]byte(info))
-
-		// Read connect and ping commands sent from the client
-		br := bufio.NewReaderSize(conn, 10*1024)
-		line, _, err := br.ReadLine()
-		if err != nil {
-			errCh <- fmt.Errorf("expected CONNECT and PING from client, got: %s", err)
-			return
-		}
-		// If client got an error reading the seed, it will not send it
-		if bytes.Contains(line, []byte(`"sig":`)) {
-			conn.Write([]byte("PONG\r\n"))
-		} else {
-			conn.Write([]byte(`-ERR go away\r\n`))
-			conn.Close()
-		}
-		// Now wait to be notified that we can finish
-		<-ch
-		errCh <- nil
-	}
-	go rs(ch)
-
-	nc, err := Connect(fmt.Sprintf("nats://127.0.0.1:%d", addr.Port), opt)
-	if err != nil {
-		t.Fatalf("Error on connect: %v", err)
-	}
-	nc.Close()
-	close(ch)
-
-	checkErrChannel(t, errCh)
-
-	// Now that option is already created, change content of file
-	os.WriteFile(seedFile, []byte(`xxxxx`), 0666)
-	ch = make(chan bool, 1)
-	go rs(ch)
-
-	if _, err := Connect(fmt.Sprintf("nats://127.0.0.1:%d", addr.Port), opt); err == nil {
-		t.Fatal("Expected error, got none")
-	}
-	close(ch)
-	checkErrChannel(t, errCh)
 }
 
 func TestNoPanicOnSrvPoolSizeChanging(t *testing.T) {

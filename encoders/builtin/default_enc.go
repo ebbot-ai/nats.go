@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"unsafe"
 )
 
 // DefaultEncoder implementation for EncodedConn.
@@ -41,9 +40,6 @@ var nilB = []byte("")
 // Deprecated: Encoded connections are no longer supported.
 func (je *DefaultEncoder) Encode(subject string, v any) ([]byte, error) {
 	switch arg := v.(type) {
-	case string:
-		bytes := *(*[]byte)(unsafe.Pointer(&arg))
-		return bytes, nil
 	case []byte:
 		return arg, nil
 	case bool:
@@ -65,59 +61,5 @@ func (je *DefaultEncoder) Encode(subject string, v any) ([]byte, error) {
 //
 // Deprecated: Encoded connections are no longer supported.
 func (je *DefaultEncoder) Decode(subject string, data []byte, vPtr any) error {
-	// Figure out what it's pointing to...
-	sData := *(*string)(unsafe.Pointer(&data))
-	switch arg := vPtr.(type) {
-	case *string:
-		*arg = sData
-		return nil
-	case *[]byte:
-		*arg = data
-		return nil
-	case *int:
-		n, err := strconv.ParseInt(sData, 10, 64)
-		if err != nil {
-			return err
-		}
-		*arg = int(n)
-		return nil
-	case *int32:
-		n, err := strconv.ParseInt(sData, 10, 64)
-		if err != nil {
-			return err
-		}
-		*arg = int32(n)
-		return nil
-	case *int64:
-		n, err := strconv.ParseInt(sData, 10, 64)
-		if err != nil {
-			return err
-		}
-		*arg = int64(n)
-		return nil
-	case *float32:
-		n, err := strconv.ParseFloat(sData, 32)
-		if err != nil {
-			return err
-		}
-		*arg = float32(n)
-		return nil
-	case *float64:
-		n, err := strconv.ParseFloat(sData, 64)
-		if err != nil {
-			return err
-		}
-		*arg = float64(n)
-		return nil
-	case *bool:
-		b, err := strconv.ParseBool(sData)
-		if err != nil {
-			return err
-		}
-		*arg = b
-		return nil
-	default:
-		vt := reflect.TypeOf(arg).Elem()
-		return fmt.Errorf("nats: Default Encoder can't decode to type %s", vt)
-	}
+	return fmt.Errorf("nats: Default Encoder can't decode to type")
 }
