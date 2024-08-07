@@ -14,7 +14,6 @@
 package nats
 
 import (
-	"errors"
 	"reflect"
 )
 
@@ -52,9 +51,9 @@ func chPublish(c *EncodedConn, chVal reflect.Value, subject string) {
 				// FIXME(dlc) - Not sure this is the right thing to do.
 				// FIXME(ivan) - If the connection is not yet closed, try to schedule the callback
 				if c.Conn.isClosed() {
-					go c.Conn.Opts.AsyncErrorCB(c.Conn, nil, e)
+					go c.Conn.Opts.AsyncErrorCB(c.Conn, e)
 				} else {
-					c.Conn.ach.push(func() { c.Conn.Opts.AsyncErrorCB(c.Conn, nil, e) })
+					c.Conn.ach.push(func() { c.Conn.Opts.AsyncErrorCB(c.Conn, e) })
 				}
 			}
 			return
@@ -62,56 +61,3 @@ func chPublish(c *EncodedConn, chVal reflect.Value, subject string) {
 	}
 }
 
-// BindRecvChan binds a channel for receive operations from NATS.
-//
-// Deprecated: Encoded connections are no longer supported.
-func (c *EncodedConn) BindRecvChan(subject string, channel any) (*Subscription, error) {
-	return c.bindRecvChan(subject, _EMPTY_, channel)
-}
-
-// BindRecvQueueChan binds a channel for queue-based receive operations from NATS.
-//
-// Deprecated: Encoded connections are no longer supported.
-func (c *EncodedConn) BindRecvQueueChan(subject, queue string, channel any) (*Subscription, error) {
-	return c.bindRecvChan(subject, queue, channel)
-}
-
-// Internal function to bind receive operations for a channel.
-func (c *EncodedConn) bindRecvChan(subject, queue string, channel any) (*Subscription, error) {
-	chVal := reflect.ValueOf(channel)
-	if chVal.Kind() != reflect.Chan {
-		return nil, ErrChanArg
-	}
-	argType := chVal.Type().Elem()
-
-	cb := func(m *Msg) {
-		var oPtr reflect.Value
-		if argType.Kind() != reflect.Ptr {
-			oPtr = reflect.New(argType)
-		} else {
-			oPtr = reflect.New(argType.Elem())
-		}
-		if err := c.Enc.Decode(m.Subject, m.Data, oPtr.Interface()); err != nil {
-			c.Conn.err = errors.New("nats: Got an error trying to unmarshal: " + err.Error())
-			if c.Conn.Opts.AsyncErrorCB != nil {
-				c.Conn.ach.push(func() { c.Conn.Opts.AsyncErrorCB(c.Conn, m.Sub, c.Conn.err) })
-			}
-			return
-		}
-		if argType.Kind() != reflect.Ptr {
-			oPtr = reflect.Indirect(oPtr)
-		}
-		// This is a bit hacky, but in this instance we may be trying to send to a closed channel.
-		// and the user does not know when it is safe to close the channel.
-		defer func() {
-			// If we have panicked, recover and close the subscription.
-			if r := recover(); r != nil {
-				m.Sub.Unsubscribe()
-			}
-		}()
-		// Actually do the send to the channel.
-		chVal.Send(oPtr)
-	}
-
-	return c.Conn.subscribe(subject, queue, cb, nil, false, nil)
-}

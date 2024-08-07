@@ -20,8 +20,6 @@ import (
 	"sync"
 	"time"
 
-	// Default Encoders
-	"github.com/ebbot-ai/nats.go/encoders/builtin"
 )
 
 //lint:file-ignore SA1019 Ignore deprecation warnings for EncodedConn
@@ -46,10 +44,6 @@ const (
 
 func init() {
 	encMap = make(map[string]Encoder)
-	// Register json, gob and default encoder
-	RegisterEncoder(JSON_ENCODER, &builtin.JsonEncoder{})
-	RegisterEncoder(GOB_ENCODER, &builtin.GobEncoder{})
-	RegisterEncoder(DEFAULT_ENCODER, &builtin.DefaultEncoder{})
 }
 
 // EncodedConn are the preferred way to interface with NATS. They wrap a bare connection to
@@ -186,80 +180,6 @@ func argInfo(cb Handler) (reflect.Type, int) {
 }
 
 var emptyMsgType = reflect.TypeOf(&Msg{})
-
-// Subscribe will create a subscription on the given subject and process incoming
-// messages using the specified Handler. The Handler should be a func that matches
-// a signature from the description of Handler from above.
-//
-// Deprecated: Encoded connections are no longer supported.
-func (c *EncodedConn) Subscribe(subject string, cb Handler) (*Subscription, error) {
-	return c.subscribe(subject, _EMPTY_, cb)
-}
-
-// QueueSubscribe will create a queue subscription on the given subject and process
-// incoming messages using the specified Handler. The Handler should be a func that
-// matches a signature from the description of Handler from above.
-//
-// Deprecated: Encoded connections are no longer supported.
-func (c *EncodedConn) QueueSubscribe(subject, queue string, cb Handler) (*Subscription, error) {
-	return c.subscribe(subject, queue, cb)
-}
-
-// Internal implementation that all public functions will use.
-func (c *EncodedConn) subscribe(subject, queue string, cb Handler) (*Subscription, error) {
-	if cb == nil {
-		return nil, errors.New("nats: Handler required for EncodedConn Subscription")
-	}
-	argType, numArgs := argInfo(cb)
-	if argType == nil {
-		return nil, errors.New("nats: Handler requires at least one argument")
-	}
-
-	cbValue := reflect.ValueOf(cb)
-	wantsRaw := (argType == emptyMsgType)
-
-	natsCB := func(m *Msg) {
-		var oV []reflect.Value
-		if wantsRaw {
-			oV = []reflect.Value{reflect.ValueOf(m)}
-		} else {
-			var oPtr reflect.Value
-			if argType.Kind() != reflect.Ptr {
-				oPtr = reflect.New(argType)
-			} else {
-				oPtr = reflect.New(argType.Elem())
-			}
-			if err := c.Enc.Decode(m.Subject, m.Data, oPtr.Interface()); err != nil {
-				if c.Conn.Opts.AsyncErrorCB != nil {
-					c.Conn.ach.push(func() {
-						c.Conn.Opts.AsyncErrorCB(c.Conn, m.Sub, errors.New("nats: Got an error trying to unmarshal: "+err.Error()))
-					})
-				}
-				return
-			}
-			if argType.Kind() != reflect.Ptr {
-				oPtr = reflect.Indirect(oPtr)
-			}
-
-			// Callback Arity
-			switch numArgs {
-			case 1:
-				oV = []reflect.Value{oPtr}
-			case 2:
-				subV := reflect.ValueOf(m.Subject)
-				oV = []reflect.Value{subV, oPtr}
-			case 3:
-				subV := reflect.ValueOf(m.Subject)
-				replyV := reflect.ValueOf(m.Reply)
-				oV = []reflect.Value{subV, replyV, oPtr}
-			}
-
-		}
-		cbValue.Call(oV)
-	}
-
-	return c.Conn.subscribe(subject, queue, natsCB, nil, false, nil)
-}
 
 // FlushTimeout allows a Flush operation to have an associated timeout.
 //
