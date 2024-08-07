@@ -807,8 +807,6 @@ func (o Options) Connect() (*Conn, error) {
 		nc.Opts.Secure = true
 	}
 
-	fmt.Printf("nc.Opts %+v\n\n", nc.Opts)
-
 	if err := nc.setupServerPool(); err != nil {
 		return nil, err
 	}
