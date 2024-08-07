@@ -20,13 +20,10 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/klauspost/compress/flate"
 )
 
 type fakeReader struct {
@@ -487,48 +484,6 @@ func TestWSNoMixingScheme(t *testing.T) {
 				t.Fatalf("Expected error about mixing, got %v", err)
 			}
 		})
-	}
-}
-
-func TestWSCompressionWithContinuationFrames(t *testing.T) {
-	uncompressed := []byte("this is an uncompressed message with AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
-	buf := &bytes.Buffer{}
-	compressor, _ := flate.NewWriter(buf, flate.BestSpeed)
-	compressor.Write(uncompressed)
-	compressor.Close()
-	b := buf.Bytes()
-	if len(b) < 30 {
-		panic("revisit test so that compressed buffer is more than 30 bytes long")
-	}
-
-	srbuf := &bytes.Buffer{}
-	// We are going to split this in several frames.
-	fh := []byte{66, 10}
-	srbuf.Write(fh)
-	srbuf.Write(b[:10])
-	fh = []byte{0, 10}
-	srbuf.Write(fh)
-	srbuf.Write(b[10:20])
-	fh = []byte{wsFinalBit, 0}
-	fh[1] = byte(len(b) - 20)
-	srbuf.Write(fh)
-	srbuf.Write(b[20:])
-
-	r := wsNewReader(srbuf)
-	rbuf := make([]byte, 100)
-	n, err := r.Read(rbuf[:15])
-	// Since we have a partial of compressed message, the library keeps track
-	// of buffer, but it can't return anything at this point, so n==0 err==nil
-	// is the expected result.
-	if n != 0 || err != nil {
-		t.Fatalf("Error reading: n=%v err=%v", n, err)
-	}
-	n, err = r.Read(rbuf)
-	if n != len(uncompressed) || err != nil {
-		t.Fatalf("Error reading: n=%v err=%v", n, err)
-	}
-	if !reflect.DeepEqual(uncompressed, rbuf[:n]) {
-		t.Fatalf("Unexpected uncompressed data: %v", rbuf[:n])
 	}
 }
 

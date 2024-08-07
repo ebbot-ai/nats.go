@@ -15,7 +15,6 @@ package nats
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
@@ -29,8 +28,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/klauspost/compress/flate"
 )
 
 type wsOpCode int
@@ -95,7 +92,6 @@ type wsDecompressor struct {
 type websocketWriter struct {
 	w          io.Writer
 	compress   bool
-	compressor *flate.Writer
 	ctrlFrames [][]byte // pending frames that should be sent at the next Write()
 	cm         []byte   // close message that needs to be sent when everything else has been sent
 	cmDone     bool     // a close message has been added or sent (never going back to false)
@@ -165,11 +161,6 @@ func (d *wsDecompressor) decompress() ([]byte, error) {
 	// Create or reset the decompressor with his object (wsDecompressor)
 	// that provides Read() and ReadByte() APIs that will consume from
 	// the compressed buffers (d.bufs).
-	if d.flate == nil {
-		d.flate = flate.NewReader(d)
-	} else {
-		d.flate.(flate.Resetter).Reset(d, nil)
-	}
 	b, err := io.ReadAll(d.flate)
 	// Now reset the compressed buffers list
 	d.bufs = nil
@@ -442,22 +433,6 @@ func (w *websocketWriter) Write(p []byte) (int, error) {
 	// Do the following only if there is something to send.
 	// We will end with checking for need to send close message.
 	if len(p) > 0 {
-		if w.compress {
-			buf := &bytes.Buffer{}
-			if w.compressor == nil {
-				w.compressor, _ = flate.NewWriter(buf, flate.BestSpeed)
-			} else {
-				w.compressor.Reset(buf)
-			}
-			if n, err = w.compressor.Write(p); err != nil {
-				return n, err
-			}
-			if err = w.compressor.Flush(); err != nil {
-				return n, err
-			}
-			b := buf.Bytes()
-			p = b[:len(b)-4]
-		}
 		fh, key := wsCreateFrameHeader(w.compress, wsBinaryMessage, len(p))
 		wsMaskBuf(key, p)
 		n, err = w.w.Write(fh)
@@ -697,9 +672,6 @@ func (nc *Conn) wsEnqueueCloseMsgLocked(status int, payload string) {
 	wr.cm = frame
 	wr.cmDone = true
 	nc.bw.flush()
-	if c := wr.compressor; c != nil {
-		c.Close()
-	}
 }
 
 func (nc *Conn) wsEnqueueControlMsg(needsLock bool, frameType wsOpCode, payload []byte) {
