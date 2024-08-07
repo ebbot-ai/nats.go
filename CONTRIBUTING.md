@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing! This document contains `nats-io/nats.go` specific contributing details. If you
+Thanks for your interest in contributing! This document contains `ebbot-ai/nats.go` specific contributing details. If you
 are a first-time contributor, please refer to the general [NATS Contributor Guide](https://nats.io/contributing/) to get
 a comprehensive overview of contributing to the NATS project.
 
@@ -12,7 +12,7 @@ There are three general ways you can contribute to this repo:
 - Reporting a bug or regression
 - Contributing changes to the source code
 
-For the first two, refer to the [GitHub Issues](https://github.com/nats-io/nats.go/issues/new/choose) which guides you
+For the first two, refer to the [GitHub Issues](https://github.com/ebbot-ai/nats.go/issues/new/choose) which guides you
 through the available options along with the needed information to collect.
 
 ## Contributing changes
@@ -51,7 +51,7 @@ A good pull request includes:
 
 In order to accept a contribution, you will first need to certify that the contribution is your original work and that
 you license the work to the project under
-the [Apache-2.0 license](https://github.com/nats-io/nats.go/blob/main/LICENSE).
+the [Apache-2.0 license](https://github.com/ebbot-ai/nats.go/blob/main/LICENSE).
 
 This is done by using `Signed-off-by` statements, which should appear in **both** your commit messages and your PR
 description. Please note that we can only accept sign-offs under a legal name. Nicknames and aliases are not permitted.
@@ -61,7 +61,7 @@ To perform a sign-off with `git`, use `git commit -s` (or `--signoff`).
 ## Get help
 
 If you have questions about the contribution process, please start
-a [GitHub discussion](https://github.com/nats-io/nats.go/discussions), join the [NATS Slack](https://slack.nats.io/), or
+a [GitHub discussion](https://github.com/ebbot-ai/nats.go/discussions), join the [NATS Slack](https://slack.nats.io/), or
 send your question to the [NATS Google Group](https://groups.google.com/forum/#!forum/natsio).
 
 ## Testing

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/ebbot-ai/nats.go"
 	"github.com/nats-io/nuid"
 )
 

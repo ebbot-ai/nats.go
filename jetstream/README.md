@@ -1,5 +1,5 @@
 
-# JetStream Simplified Client [![JetStream API Reference](https://pkg.go.dev/badge/github.com/nats-io/nats.go/jetstream.svg)](https://pkg.go.dev/github.com/nats-io/nats.go/jetstream)
+# JetStream Simplified Client [![JetStream API Reference](https://pkg.go.dev/badge/github.com/ebbot-ai/nats.go/jetstream.svg)](https://pkg.go.dev/github.com/ebbot-ai/nats.go/jetstream)
 
 This doc covers the basic usage of the `jetstream` package in `nats.go` client.
 
@@ -81,8 +81,8 @@ import (
     "strconv"
     "time"
 
-    "github.com/nats-io/nats.go"
-    "github.com/nats-io/nats.go/jetstream"
+    "github.com/ebbot-ai/nats.go"
+    "github.com/ebbot-ai/nats.go/jetstream"
 )
 
 func main() {
@@ -1012,4 +1012,4 @@ fmt.Println(status.Size()) // prints the size of the bucket in bytes
 
 ## Examples
 
-You can find more examples of `jetstream` usage [here](https://github.com/nats-io/nats.go/tree/main/examples/jetstream).
+You can find more examples of `jetstream` usage [here](https://github.com/ebbot-ai/nats.go/tree/main/examples/jetstream).

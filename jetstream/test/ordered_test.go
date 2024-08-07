@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
+	"github.com/ebbot-ai/nats.go"
+	"github.com/ebbot-ai/nats.go/jetstream"
 )
 
 func TestOrderedConsumerConsume(t *testing.T) {

@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/ebbot-ai/nats.go"
 )
 
 func BenchmarkPublishSpeed(b *testing.B) {

@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/micro"
+	"github.com/ebbot-ai/nats.go"
+	"github.com/ebbot-ai/nats.go/micro"
 )
 
 func Example() {

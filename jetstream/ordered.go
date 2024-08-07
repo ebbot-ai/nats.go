@@ -23,7 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	"github.com/ebbot-ai/nats.go"
 )
 
 type (
