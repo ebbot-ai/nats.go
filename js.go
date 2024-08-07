@@ -2810,12 +2810,6 @@ func (sub *Subscription) Fetch(batch int, opts ...PullOpt) ([]*Msg, error) {
 	if ctx == nil {
 		ctx, cancel = context.WithTimeout(context.Background(), ttl)
 	} else if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		// Prevent from passing the background context which will just block
-		// and cannot be canceled either.
-		if octx, ok := ctx.(ContextOpt); ok && octx.Context == context.Background() {
-			return nil, ErrNoDeadlineContext
-		}
-
 		// If the context did not have a deadline, then create a new child context
 		// that will use the default timeout from the JS context.
 		ctx, cancel = context.WithTimeout(ctx, ttl)
