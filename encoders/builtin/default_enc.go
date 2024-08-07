@@ -16,8 +16,6 @@ package builtin
 import (
 	"bytes"
 	"fmt"
-	"reflect"
-	"strconv"
 )
 
 // DefaultEncoder implementation for EncodedConn.

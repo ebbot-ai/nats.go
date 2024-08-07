@@ -82,18 +82,6 @@ func main() {
 	}
 
 	// Use UserCredentials
-	if *userCreds != "" {
-		opts = append(opts, nats.UserCredentials(*userCreds))
-	}
-
-	// Use Nkey authentication.
-	if *nkeyFile != "" {
-		opt, err := nats.NkeyOptionFromSeed(*nkeyFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		opts = append(opts, opt)
-	}
 
 	// Use TLS specified
 	if *tls {

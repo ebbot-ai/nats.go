@@ -64,11 +64,6 @@ func main() {
 		log.Fatal("specify -seed or -creds")
 	}
 
-	// Use UserCredentials
-	if *userCreds != "" {
-		opts = append(opts, nats.UserCredentials(*userCreds))
-	}
-
 	// Use TLS client authentication
 	if *tlsClientCert != "" && *tlsClientKey != "" {
 		opts = append(opts, nats.ClientCert(*tlsClientCert, *tlsClientKey))
@@ -77,15 +72,6 @@ func main() {
 	// Use specific CA certificate
 	if *tlsCACert != "" {
 		opts = append(opts, nats.RootCAs(*tlsCACert))
-	}
-
-	// Use Nkey authentication.
-	if *nkeyFile != "" {
-		opt, err := nats.NkeyOptionFromSeed(*nkeyFile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		opts = append(opts, opt)
 	}
 
 	// Connect to NATS
