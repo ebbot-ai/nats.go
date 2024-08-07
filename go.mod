@@ -1,4 +1,4 @@
-module github.com/ebbot-ai/nats.io
+module github.com/ebbot-ai/nats.go
 
 go 1.20
 
